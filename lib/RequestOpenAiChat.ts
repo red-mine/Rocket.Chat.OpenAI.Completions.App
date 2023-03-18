@@ -70,6 +70,9 @@ export async function OpenAiCompletionRequest(
                     "error"
                 ]["message"].replace("api-keys.", "api-keys");
             }
+            result["content"]["choices"][0]["message"]["content"] = result["content"][
+                "choices"
+            ][0]["message"]["content"].replace("\n\n", "");
             app.getLogger().info(
                 `Got new completion`,
                 result,
