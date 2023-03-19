@@ -64,8 +64,6 @@ export async function OpenAiCompletionRequest(
             };
             if ("error" in ok.data) {
                 result["success"] = false;
-                // this is necessary for the link to be rendered correctly
-                // due to a bug in RC parser.
                 result["content"]["error"]["message"] = result["content"][
                     "error"
                 ]["message"].replace("api-keys.", "api-keys");
