@@ -1,4 +1,4 @@
-# OpenAI Completions
+# OpenAI Chat App
 Use OpenAi Completions (ChatGPT3) inside Rocket.Chat!
 
 ## Installing this App

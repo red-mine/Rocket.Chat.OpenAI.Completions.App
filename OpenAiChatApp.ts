@@ -28,6 +28,7 @@ import { OpenAiCompletionRequest } from "./lib/RequestOpenAiChat";
 import { sendDirect } from "./lib/SendDirect";
 import { sendMessage } from "./lib/SendMessage";
 import { sendNotification } from "./lib/SendNotification";
+import { DirectContext } from "./persistence/DirectContext";
 
 export class OpenAiChatApp extends App implements IPostMessageSent {
     constructor(info: IAppInfo, logger: ILogger, accessors: IAppAccessors) {
@@ -98,22 +99,57 @@ export class OpenAiChatApp extends App implements IPostMessageSent {
         const { text, editedAt, room, sender } = message;
         // we only want direct with the app username
         var bot_user = await read.getUserReader().getAppUser();
+        var context: any;
         if (
             bot_user &&
             message.room.type == RoomType.DIRECT_MESSAGE && // direct messages
-            message.room.userIds?.includes(bot_user?.id) && // that has bot_user id
-            bot_user?.id !== sender.id // and was not sent by the bot itself
+            message.room.userIds?.includes(bot_user?.id) // that has bot_user id
+            // bot_user?.id !== sender.id // and was not sent by the bot itself
         ) {
+            if(bot_user?.id == sender.id && message.threadId){
+                // this the bot answer, get the actual context and store it
+                context_data = await DirectContext.get(read, message.threadId)
+                context = context_data[0]["context"]
+                context.push(
+                    { role: "assistant", content: message.text }
+                )
+                await DirectContext.update(
+                    persistence, message.threadId, context
+                )
+                return;
+            }
+            // get thread id
+            // discover is there any context for this thread
+            if (message.threadId) {
+                // message from inside a thread
+                // get context, and push to it
+                var context_data = await DirectContext.get(
+                    read,
+                    message.threadId
+                );
+                context = context_data[0]["context"]
+                context.push({ role: "user", content: message.text })
+                // update context on persistence
+                await DirectContext.update(persistence, message.threadId, context);
+            } else {
+                // no thread id, first message, initiating context
+                var context = [{ role: "user", content: message.text }] as any;
+                // update context
+                if (message.id) {
+                    await DirectContext.update(persistence, message.id, context);
+                }
+            }
             const result = await OpenAiCompletionRequest(
                 this,
                 http,
                 read,
-                [{"role": "user", "content": message.text}],
+                context,
                 sender
             );
             if (result.success) {
-                var markdown_message = result.content.choices[0].message.content;
-                sendDirect(sender, read, modify, markdown_message);
+                var markdown_message =
+                    result.content.choices[0].message.content;
+                sendDirect(sender, read, modify, markdown_message, message.threadId || message.id);
             } else {
                 sendNotification(
                     modify,
